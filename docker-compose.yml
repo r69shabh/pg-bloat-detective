@@ -1,0 +1,13 @@
+services:
+  pg:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: bloatdemo
+    ports: ["5433:5432"]  # 5433: 5432 taken on this host
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements", "-c", "track_counts=on", "-c", "autovacuum=on", "-c", "log_autovacuum_min_duration=0"]
+    # one-time (demo DB only, not prod): docker compose exec pg psql -U postgres -d bloatdemo -c "CREATE EXTENSION IF NOT EXISTS pgstattuple;"
+  # workload / failure injectors run as one-shot scripts, not services:
+  #   --idle-xact  : open idle-in-transaction + hold xmin
+  #   --slot       : create abandoned replication slot
+  #   --churn      : aggressive update/delete loop (+ optional pgbench)
