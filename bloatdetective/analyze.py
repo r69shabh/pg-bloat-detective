@@ -13,7 +13,7 @@ def _age_secs(s: str) -> float:
         if "day" in s:
             d, s = s.split("day")
             days = int(d.strip().split()[-1])
-            s = s.strip(", ")
+            s = s.lstrip("s").strip(", ")
         h, m, sec = s.split(":")
         return days * 86400 + int(h) * 3600 + int(m) * 60 + float(sec)
     except Exception:
@@ -52,7 +52,8 @@ def analyze(db_path: str) -> list[dict]:
         grow = dead - rows[0][1] if len(rows) > 1 else 0
         approx = con.execute("SELECT dead_pct FROM approx WHERE tbl=? ORDER BY ts DESC LIMIT 1", (t,)).fetchone()
         stat_pct = dead / max(live + dead, 1) * 100
-        dead_pct = approx[0] if approx else stat_pct
+        has_approx = approx is not None
+        dead_pct = approx[0] if has_approx else stat_pct
         thr = trigger_threshold(live, s)
         if blocker and dead > thr and grow > 0:
             verdict = VERDICTS.get(blocker[0], f"blocked-by-{blocker[0]}")
@@ -60,7 +61,8 @@ def analyze(db_path: str) -> list[dict]:
             evidence = f"xmin horizon {blocker[2]} held by {who} — vacuum cannot advance past it"
         elif dead > thr and grow > 0:
             verdict, evidence = "vacuum-starved", f"dead={dead} > threshold={thr:.0f}, growing +{grow}, no blocker — autovacuum not keeping up"
-        elif dead_pct > 30:
+        elif has_approx and dead_pct > 30:
+            # rewrite only on measured approx, never on stat % alone (single snapshot proves nothing)
             verdict, evidence = "needs-rewrite", f"pgstattuple_approx dead={dead_pct:.1f}% — VACUUM can't reclaim, needs pg_repack/VACUUM FULL"
         elif stat_pct > 20 and dead_pct < 5:
             # observed live: pg_stat counters lag (flush interval) while approx shows clean heap

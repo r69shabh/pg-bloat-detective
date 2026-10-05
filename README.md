@@ -19,8 +19,15 @@ bash scripts/benchmark.sh   # full before/after proof -> REPORT.md
 
 `normal` (steady-state, leave alone) · `vacuum-starved` · `blocked-by-idle-xact|slot|prepared` · `needs-rewrite`
 
-## Benchmark (fill after first run)
+## Benchmark (measured 2026-10-05, local PG16, `bash scripts/benchmark.sh`)
 
-dead before → after: _TBD_ (run `scripts/benchmark.sh`, paste `REPORT.md` numbers here)
+45s churn + `idle-xact` blocker (pid 142, xmin held 45s) → kill blocker → `VACUUM ANALYZE`:
+
+| moment | pg_stat dead | approx dead% | verdict |
+|---|---|---|---|
+| before fix | 2,311,245 | 73.5% | blocked (xmin pinned by pid 142) |
+| after fix | 0 | 0.0% | normal — steady state, leave alone |
+
+100% of dead tuples reclaimed. Full log in `REPORT.md`, visual in `report.html`.
 
 See [PLAN.md](PLAN.md) for the detailed 3-week plan + competitor gap.
