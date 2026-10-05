@@ -4,3 +4,5 @@ __pycache__/
 *.db
 *.html
 *.egg-info/
+dashboard/node_modules/
+dashboard/.next/

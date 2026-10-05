@@ -1,6 +1,7 @@
-"""Markdown report + thin HTML dashboard (inline SVG, zero deps)."""
+"""Markdown report + thin HTML dashboard (inline SVG, zero deps) + JSON export (shadcn dashboard feed)."""
 from __future__ import annotations
 import sqlite3
+import time
 
 def render(findings: list[dict], before_after: tuple | None = None) -> str:
     lines = ["# Bloat report", "", "| table | verdict | dead | live | evidence |", "|---|---|---|---|---|"]
@@ -19,6 +20,19 @@ def _sparkline(points: list[int], w: int = 200, h: int = 36) -> str:
     step = w / max(len(points) - 1, 1)
     pts = " ".join(f"{i * step:.0f},{h - (v / mx) * (h - 4) - 2:.0f}" for i, v in enumerate(points))
     return f'<svg width="{w}" height="{h}"><polyline points="{pts}" fill="none" stroke="currentColor" stroke-width="2"/></svg>'
+
+def export_json(db_path: str, findings: list[dict]) -> dict:
+    """Machine-readable feed for the shadcn dashboard: findings + per-table series + blockers."""
+    con = sqlite3.connect(db_path)
+    tables = [r[0] for r in con.execute("SELECT DISTINCT tbl FROM snapshots ORDER BY tbl")]
+    series = {t: [{"ts": ts, "live": lv, "dead": d} for ts, lv, d in
+              con.execute("SELECT ts, live, dead FROM snapshots WHERE tbl=? ORDER BY ts", (t,))] for t in tables}
+    approx = {t: [{"ts": ts, "dead_pct": p} for ts, p in
+              con.execute("SELECT ts, dead_pct FROM approx WHERE tbl=? ORDER BY ts", (t,))] for t in tables}
+    blockers = [{"ts": ts, "kind": k, "pid": p, "age": a, "query": q, "slot": s} for ts, k, p, a, q, s in
+                con.execute("SELECT ts, kind, pid, xact_age, query, slot FROM blockers ORDER BY ts DESC LIMIT 20")]
+    con.close()
+    return {"generated_at": int(time.time()), "findings": findings, "series": series, "approx": approx, "blockers": blockers}
 
 def render_html(db_path: str, findings: list[dict]) -> str:
     con = sqlite3.connect(db_path)

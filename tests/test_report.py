@@ -44,3 +44,22 @@ def test_render_html_no_blockers(tmp_path):
     con.commit()
     con.close()
     assert "none</li>" in render_html(db, [])
+
+def test_export_json_feed(tmp_path):
+    from bloatdetective.report import export_json
+    db = str(tmp_path / "t.db")
+    con = sqlite3.connect(db)
+    con.executescript("CREATE TABLE snapshots(ts INT, kind TEXT, tbl TEXT, live INT, dead INT, vac_ct INT, avac_ct INT, last_vac TEXT, last_avac TEXT); CREATE TABLE blockers(ts INT, kind TEXT, pid INT, xact_age TEXT, query TEXT, slot TEXT, active INT); CREATE TABLE approx(ts INT, tbl TEXT, dead_pct REAL, idx TEXT, idx_bloat_pct REAL);")
+    con.executemany("INSERT INTO snapshots VALUES (?,?,?,?,?,?,?,?,?)",
+        [(1, "table", "churn", 10000, 100, 0, 0, "", ""), (2, "table", "churn", 10000, 5000, 0, 0, "", "")])
+    con.execute("INSERT INTO approx VALUES (2,'churn',12.5,NULL,NULL)")
+    con.execute("INSERT INTO blockers VALUES (2,'idle in transaction',123,'00:05:00','SELECT 1','',1)")
+    con.commit()
+    con.close()
+    feed = export_json(db, F)
+    assert feed["findings"] == F
+    assert [p["dead"] for p in feed["series"]["churn"]] == [100, 5000]
+    assert feed["approx"]["churn"] == [{"ts": 2, "dead_pct": 12.5}]
+    assert feed["blockers"][0]["pid"] == 123
+    import json as _json
+    _json.dumps(feed)  # must be JSON-serializable for the dashboard
