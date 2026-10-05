@@ -47,3 +47,21 @@ def test_serve_fn_binds(tmp_path):
     time.sleep(0.5)
     body = urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=5).read().decode()
     assert 'verdict="blocked-by-idle-xact"' in body
+
+def test_multi_db_labels(tmp_path):
+    from bloatdetective.exporter import collect_all
+    db1 = str(tmp_path / "shop.db")
+    db2 = str(tmp_path / "analytics.db")
+    seed(db1)
+    seed(db2)
+    m = collect_all([db1, db2])
+    assert 'db="shop"' in m and 'db="analytics"' in m
+    assert m.count('verdict="blocked-by-idle-xact"') == 2
+
+def test_single_db_no_label(tmp_path):
+    # backward compatible: one file -> no db label (old dashboards keep working)
+    from bloatdetective.exporter import collect_all
+    db = str(tmp_path / "shop.db")
+    seed(db)
+    m = collect_all([db])
+    assert "db=" not in m
