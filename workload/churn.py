@@ -3,7 +3,7 @@ import argparse, time
 import psycopg
 
 SETUP = "CREATE TABLE IF NOT EXISTS churn(id SERIAL PRIMARY KEY, v TEXT); INSERT INTO churn(v) SELECT 'x' FROM generate_series(1,10000) ON CONFLICT DO NOTHING;"
-CHURN = "UPDATE churn SET v = md5(random()::text) WHERE id %% 10 = 0; DELETE FROM churn WHERE id %% 97 = 0; INSERT INTO churn(v) SELECT md5(g::text) FROM generate_series(1,100) g ON CONFLICT DO NOTHING;"
+CHURN = "UPDATE churn SET v = md5(random()::text) WHERE id % 10 = 0; DELETE FROM churn WHERE id % 97 = 0; INSERT INTO churn(v) SELECT md5(g::text) FROM generate_series(1,100) g ON CONFLICT DO NOTHING;"
 
 def main() -> None:
     p = argparse.ArgumentParser()
