@@ -16,8 +16,21 @@ def collect_metrics(db_path: str, label: str = "") -> str:
         lines.append(f'pgbloat_live_tuples{{{label}table="{t}"}} {f["live"]}')
     try:
         con = sqlite3.connect(db_path)
-        for (t, pct) in con.execute("SELECT tbl, dead_pct FROM approx WHERE (tbl, ts) IN (SELECT tbl, max(ts) FROM approx GROUP BY tbl)"):
-            lines.append(f'pgbloat_approx_dead_pct{{{label}table="{t}"}} {pct}')
+        try:
+            for (t, pct) in con.execute("SELECT tbl, dead_pct FROM approx WHERE tbl IS NOT NULL AND (tbl, ts) IN (SELECT tbl, max(ts) FROM approx WHERE tbl IS NOT NULL GROUP BY tbl)"):
+                lines.append(f'pgbloat_approx_dead_pct{{{label}table="{t}"}} {pct}')
+        except Exception:
+            pass
+        try:
+            for (idx, pct) in con.execute("SELECT idx, idx_bloat_pct FROM approx WHERE idx IS NOT NULL AND idx_bloat_pct IS NOT NULL AND (idx, ts) IN (SELECT idx, max(ts) FROM approx WHERE idx IS NOT NULL GROUP BY idx)"):
+                lines.append(f'pgbloat_index_bloat_pct{{{label}index="{idx}"}} {pct}')
+        except Exception:
+            pass
+        try:
+            for (idx, tbl, scans) in con.execute('SELECT idx, tbl, scans FROM index_stats WHERE (idx, ts) IN (SELECT idx, max(ts) FROM index_stats GROUP BY idx)'):
+                lines.append(f'pgbloat_index_scans{{{label}index="{idx}",table="{tbl}"}} {scans or 0}')
+        except Exception:
+            pass  # old DBs without index_stats keep serving heap metrics
         for (kind, pid, age, q) in con.execute("SELECT kind, pid, xact_age, query FROM blockers ORDER BY ts DESC LIMIT 20"):
             secs = _age_secs(age or "")
             if secs >= 0:

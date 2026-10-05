@@ -7,8 +7,8 @@ import type { Finding } from "@/lib/feed"
 
 function verdictVariant(v: string): "secondary" | "outline" | "destructive" | "default" {
   if (v === "normal") return "secondary"
-  if (v === "vacuum-starved") return "outline"
-  if (v.startsWith("blocked-by")) return "destructive"
+  if (v === "vacuum-starved" || v === "index-unused") return "outline"
+  if (v.startsWith("blocked-by") || v === "index-bloated") return "destructive"
   return "default"
 }
 

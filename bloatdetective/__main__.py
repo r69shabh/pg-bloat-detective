@@ -15,10 +15,14 @@ def main() -> None:
     p.add_argument("--json", action="store_true")  # data feed for dashboard/: --out data.json
     p.add_argument("--out", default="report.html")
     p.add_argument("--port", type=int, default=9187)
+    p.add_argument("--allow-large", action="store_true",
+                   help="run pgstattuple_approx/pgstatindex even on tables/indexes >1GB")
+    p.add_argument("--max-bytes", type=int, default=1_073_741_824,
+                   help="cost guard: skip approx/statindex above this size in bytes")
     a = p.parse_args()
     dbs = a.db or ["timeline.db"]
     if a.cmd == "collect":
-        collect(a.dsn, dbs[0])
+        collect(a.dsn, dbs[0], max_bytes=2**63 - 1 if a.allow_large else a.max_bytes)
         print(f"snapshot saved to {dbs[0]}")
     elif a.cmd == "serve":
         serve(dbs, a.port)

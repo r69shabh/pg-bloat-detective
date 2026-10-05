@@ -27,5 +27,7 @@ export interface Feed {
   findings: Finding[];
   series: Record<string, SeriesPoint[]>;
   approx: Record<string, { ts: number; dead_pct: number }[]>;
+  index_bloat?: Record<string, { ts: number; bloat_pct: number }[]>;
+  index_scans?: Record<string, { ts: number; scans: number }[]>;
   blockers: Blocker[];
 }

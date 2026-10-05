@@ -23,6 +23,7 @@ function fmtTime(ts: number) {
 
 export function ChartAreaInteractive({ feed }: { feed: Feed }) {
   const tables = Object.keys(feed.series).slice(0, 5)
+  const indexes = Object.keys(feed.index_bloat ?? {}).slice(0, 5)
   const rows = React.useMemo(() => {
     const byTs = new Map<number, Record<string, number>>()
     for (const t of tables) {
@@ -32,8 +33,18 @@ export function ChartAreaInteractive({ feed }: { feed: Feed }) {
     }
     return [...byTs.entries()].map(([ts, rest]) => ({ ts, ...rest })).sort((a, b) => a.ts - b.ts)
   }, [feed, tables.join(",")]) // eslint-disable-line react-hooks/exhaustive-deps
+  const idxRows = React.useMemo(() => {
+    const byTs = new Map<number, Record<string, number>>()
+    for (const i of indexes) {
+      for (const p of feed.index_bloat?.[i] ?? []) {
+        byTs.set(p.ts, { ...(byTs.get(p.ts) ?? {}), [i]: p.bloat_pct })
+      }
+    }
+    return [...byTs.entries()].map(([ts, rest]) => ({ ts, ...rest })).sort((a, b) => a.ts - b.ts)
+  }, [feed, indexes.join(",")]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
+    <>
     <Card className="@container/card">
       <CardHeader>
         <CardTitle>Dead tuples</CardTitle>
@@ -55,5 +66,29 @@ export function ChartAreaInteractive({ feed }: { feed: Feed }) {
         </div>
       </CardContent>
     </Card>
+    {indexes.length > 0 && (
+    <Card className="@container/card mt-4">
+      <CardHeader>
+        <CardTitle>Index bloat %</CardTitle>
+        <CardDescription>100 − pgstatindex avg_leaf_density per index</CardDescription>
+      </CardHeader>
+      <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
+        <div className="h-[200px] w-full">
+          <ResponsiveContainer>
+            <AreaChart data={idxRows}>
+              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <XAxis dataKey="ts" tickLine={false} axisLine={false} tickMargin={8} minTickGap={32} tickFormatter={fmtTime} />
+              <YAxis tickLine={false} axisLine={false} width={60} domain={[0, 100]} tickFormatter={(v: number) => `${v}%`} />
+              <Tooltip labelFormatter={(label: ReactNode) => fmtTime(Number(label))} />
+              {indexes.map((t, i) => (
+                <Area key={t} dataKey={t} type="monotone" fill={PALETTE[(i + 1) % PALETTE.length]} stroke={PALETTE[(i + 1) % PALETTE.length]} fillOpacity={0.25} />
+              ))}
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+    )}
+    </>
   )
 }

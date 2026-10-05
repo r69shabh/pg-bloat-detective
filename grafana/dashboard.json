@@ -3,6 +3,10 @@
    "targets": [{"expr": "pgbloat_dead_tuples"}]},
   {"title": "Approx dead % by table", "type": "timeseries",
    "targets": [{"expr": "pgbloat_approx_dead_pct"}]},
+  {"title": "Index bloat % (100 - avg_leaf_density)", "type": "timeseries",
+   "targets": [{"expr": "pgbloat_index_bloat_pct"}]},
+  {"title": "Index scans (flatline at 0 = unused?)", "type": "timeseries",
+   "targets": [{"expr": "pgbloat_index_scans"}]},
   {"title": "Xmin holder age (s)", "type": "timeseries",
    "targets": [{"expr": "pgbloat_xmin_holder_age_seconds"}]}
 ]}

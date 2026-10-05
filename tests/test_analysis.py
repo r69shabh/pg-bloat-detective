@@ -98,3 +98,42 @@ def test_latest_settings_win(tmp_path):
         (1, "autovacuum_vacuum_scale_factor", "0.01"),   # thr=150 -> 500 starved...
         (2, "autovacuum_vacuum_scale_factor", "0.9")])   # ...but latest thr=9050 -> normal
     assert analyze(db)[0]["verdict"] == "normal"
+
+
+def _idx_db(tmp_path, approx_rows=(), stats_rows=(), name="idx.db"):
+    db = str(tmp_path / name)
+    con = sqlite3.connect(db)
+    con.executescript("CREATE TABLE snapshots(ts INT, kind TEXT, tbl TEXT, live INT, dead INT, vac_ct INT, avac_ct INT, last_vac TEXT, last_avac TEXT); CREATE TABLE blockers(ts INT, kind TEXT, pid INT, xact_age TEXT, query TEXT, slot TEXT, active INT); CREATE TABLE approx(ts INT, tbl TEXT, dead_pct REAL, idx TEXT, idx_bloat_pct REAL); CREATE TABLE index_stats(ts INT, idx TEXT, tbl TEXT, scans INT, size_bytes INT);")
+    con.execute("INSERT INTO snapshots VALUES (1,'table','churn',10000,100,0,0,'','')")
+    con.executemany("INSERT INTO approx VALUES (?,?,?,?,?)", approx_rows)
+    con.executemany("INSERT INTO index_stats VALUES (?,?,?,?,?)", stats_rows)
+    con.commit()
+    con.close()
+    return db
+
+
+def test_index_bloated_over_threshold(tmp_path):
+    db = _idx_db(tmp_path, [(1, None, None, "churn_pkey", 83.7)],
+                 [(1, "churn_pkey", "churn", 5000, 32120832)])
+    f = [x for x in analyze(db) if x["table"] == "churn_pkey"][0]
+    assert f["verdict"] == "index-bloated" and "83.7%" in f["evidence"]
+
+
+def test_index_healthy_stays_quiet(tmp_path):
+    db = _idx_db(tmp_path, [(1, None, None, "churn_pkey", 9.9)],
+                 [(1, "churn_pkey", "churn", 5000, 32120832)])
+    assert [x for x in analyze(db) if x["table"] == "churn_pkey"] == []
+
+
+def test_index_unused_zero_scans(tmp_path):
+    db = _idx_db(tmp_path, [(1, None, None, "dead_idx", 5.0)],
+                 [(1, "dead_idx", "churn", 0, 8192)])
+    f = [x for x in analyze(db) if x["table"] == "dead_idx"][0]
+    assert f["verdict"] == "index-unused"
+
+
+def test_index_null_bloat_row_ignored(tmp_path):
+    # skipped-large marker (NULL bloat) + healthy scans -> no finding, no crash
+    db = _idx_db(tmp_path, [(1, None, None, "big_idx", None)],
+                 [(1, "big_idx", "churn", 100, 5_000_000_000)])
+    assert [x for x in analyze(db) if x["table"] == "big_idx"] == []

@@ -18,17 +18,26 @@ bash scripts/benchmark.sh   # full before/after proof -> REPORT.md
 
 ## Verdicts
 
-`normal` (steady-state, leave alone) · `vacuum-starved` · `blocked-by-idle-xact|slot|prepared` · `needs-rewrite`
+Heap: `normal` (steady-state, leave alone) · `vacuum-starved` · `blocked-by-idle-xact|slot|prepared|active-xact` · `needs-rewrite`.
+Index: `index-bloated` (pgstatindex bloat >30% → needs REINDEX, VACUUM can't fix it) · `index-unused` (idx_scan=0 across snapshots → DROP candidate).
 
-## Benchmark (measured 2026-10-05, local PG16, `bash scripts/benchmark.sh`)
+Index bloat is the differentiator (pganalyze admits the gap): `collect` runs exact
+`pgstatindex` only on indexes under the 1GB cost guard (`--max-bytes` tunes it,
+`--allow-large` overrides), metric = `100 − avg_leaf_density`. Exported as
+`pgbloat_index_bloat_pct` / `pgbloat_index_scans`, charted in the shadcn dashboard,
+Graphed in Grafana.
 
-45s churn + `idle-xact` blocker (pid 142, xmin held 45s) → kill blocker → `VACUUM ANALYZE`:
+## Benchmark (measured 2026-10-05, local PG16 — heap + index, live run just now)
 
-| moment | pg_stat dead | approx dead% | verdict |
-|---|---|---|---|
-| before fix | 2,311,245 | 73.5% | blocked (xmin pinned by pid 142) |
-| after fix | 0 | 0.0% | normal — steady state, leave alone |
+30s churn, no blocker (autovacuum simply lost) → `VACUUM ANALYZE` + `REINDEX`:
 
-100% of dead tuples reclaimed. Full log in `REPORT.md`, visual in `report.html`.
+| moment | pg_stat dead | approx dead% | index bloat% (density) | verdict |
+|---|---|---|---|---|
+| before fix | 5,108,201 | — (single-snapshot lag) | 41.9% | `vacuum-starved` + `index-bloated churn_pkey` |
+| after fix | 0 | 0.0% | 9.9% | `normal` — steady state, leave alone |
+
+Earlier hole, now closed: an index at 83.7% bloat (density 16.3) dropped to 9.9%
+(density 90.1) after `REINDEX` — VACUUM alone never touches that. Full log in
+`REPORT.md`, visual in `report.html`.
 
 See [PLAN.md](PLAN.md) for the detailed 3-week plan + competitor gap.

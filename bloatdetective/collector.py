@@ -20,9 +20,12 @@ WHERE backend_xmin IS NOT NULL AND pid <> pg_backend_pid() ORDER BY xact_start L
 SLOTS_SQL = "SELECT slot_name, active FROM pg_replication_slots"
 PREPARED_SQL = "SELECT gid FROM pg_prepared_xacts"
 HAS_EXT_SQL = "SELECT count(*) FROM pg_extension WHERE extname='pgstattuple'"
+IDX_SIZE_SQL = "SELECT indexrelname, pg_relation_size(indexrelid) FROM pg_stat_user_indexes"
 
 # ponytail: pgstattuple_approx only on tables < cost guard (default 1GB) unless --allow-large
 APPROX_SQL = "SELECT * FROM pgstattuple_approx(%s)"
+# ioguix-style: exact pgstatindex only on small indexes (< cost guard); metric = 100 - avg_leaf_density
+STATINDEX_SQL = "SELECT avg_leaf_density, leaf_fragmentation FROM pgstatindex(%s)"
 
 def init_db(path: str) -> sqlite3.Connection:
     con = sqlite3.connect(path)
@@ -59,6 +62,21 @@ def collect(dsn: str, db_path: str, approx: bool = True, max_bytes: int = 1_073_
                     con.execute("INSERT INTO approx VALUES (?,?,?,NULL,NULL)", (ts, t, round(dead_pct, 2)))
                 except Exception:
                     pg.rollback()  # failed approx must not poison the read tx
+                    continue
+            # index bloat: exact pgstatindex only on small indexes (< cost guard);
+            # metric = 100 - avg_leaf_density, stored as approx row (tbl=NULL, idx set)
+            for (idx, size) in pg.execute(IDX_SIZE_SQL).fetchall():
+                if (size or 0) > max_bytes:
+                    con.execute("INSERT INTO approx VALUES (?,?,?,?,?)",
+                                (ts, None, None, idx, None))  # skipped-large marker
+                    continue
+                try:
+                    r = pg.execute(STATINDEX_SQL, (idx,)).fetchone()
+                    density = float(r[0] or 0.0)
+                    bloat = round(100.0 - density, 2)
+                    con.execute("INSERT INTO approx VALUES (?,?,?,?,?)", (ts, None, None, idx, bloat))
+                except Exception:
+                    pg.rollback()
                     continue
     con.commit()
     con.close()

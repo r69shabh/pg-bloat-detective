@@ -21,6 +21,7 @@ Stack: **Python + SQLite** (ships faster than Go; single `pip install -e .`). Re
 - [ ] `collector.py`: poll every 60s (cron/loop): `pg_stat_user_tables` (live/dead, vac counts, last vac/avac), `pg_stat_activity` (backend_xmin holders, xact age, pid, query), `pg_replication_slots` (inactive), `pg_prepared_xacts`, autovacuum settings (`SELECT * FROM pg_settings WHERE name LIKE 'autovacuum%'`), index stats `pg_stat_user_indexes`. All read-only; `SET statement_timeout=5s; SET transaction_read_only=on`.
 - [ ] `pgstattuple_approx` confirmation with cost guard: `SELECT pg_relation_size()` first, skip heap >1GB (flag `--allow-large` overrides); catch missing extension gracefully.
 - [ ] Index bloat v1: reuse ioguix-style estimate query (catalog stats, no scan) + `pgstatindex`-approx on small indexes only. pganalyze admits this gap — our differentiator.
+  - [x] DONE 2026-10-05: exact `pgstatindex` on indexes <1GB cost guard (metric `100-avg_leaf_density`), `--allow-large`/`--max-bytes` flags; `index-bloated` (>30%) + `index-unused` (scan=0) verdicts; `pgbloat_index_bloat_pct`/`pgbloat_index_scans` metrics + Grafana panels + dashboard chart. Live proof: 83.7%→9.9% after REINDEX.
 - [ ] SQLite schema: `snapshots`, `blockers`, `approx` (already scaffolded). One file = timeline.
 - [ ] `workload/churn.py`: `churn` (update/delete/insert loop), `idle-xact` (BEGIN + pg_sleep holds xmin), `slot` (abandoned logical slot). `docker compose up` → demo DB ready.
 - [ ] Done = `collect` twice against compose DB produces rows in all three tables.

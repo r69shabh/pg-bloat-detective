@@ -1,4 +1,10 @@
-"""Verdicts per table: normal | vacuum-starved | blocked-by-X | needs-rewrite."""
+"""Verdicts per table: normal | vacuum-starved | blocked-by-X | needs-rewrite.
+
+Plus per index: index-bloated | index-unused (only actionable index findings are
+emitted; healthy indexes stay quiet so the report doesn't double in size).
+Index bloat metric = 100 - pgstatindex.avg_leaf_density, same >30% rewrite
+threshold as the heap path. Unused = zero idx_scan across every snapshot.
+"""
 from __future__ import annotations
 import sqlite3
 
@@ -50,7 +56,7 @@ def analyze(db_path: str) -> list[dict]:
             continue
         live, dead = rows[-1]
         grow = dead - rows[0][1] if len(rows) > 1 else 0
-        approx = con.execute("SELECT dead_pct FROM approx WHERE tbl=? ORDER BY ts DESC LIMIT 1", (t,)).fetchone()
+        approx = con.execute("SELECT dead_pct FROM approx WHERE tbl=? AND idx IS NULL ORDER BY ts DESC LIMIT 1", (t,)).fetchone()
         stat_pct = dead / max(live + dead, 1) * 100
         has_approx = approx is not None
         dead_pct = approx[0] if has_approx else stat_pct
@@ -72,5 +78,44 @@ def analyze(db_path: str) -> list[dict]:
             verdict, evidence = "normal", f"dead={dead} (threshold {thr:.0f}), approx {dead_pct:.1f}% — steady state, leave alone"
         out.append({"table": t, "verdict": verdict, "evidence": evidence, "dead": dead, "live": live,
                     "horizon": blocker[2] if blocker else None})
+    for idx, tbl, scans, size in _index_latest(con):
+        bloat = _index_bloat(con, idx)
+        if bloat is not None and bloat > 30:
+            out.append({"table": idx, "verdict": "index-bloated",
+                        "evidence": f"pgstatindex bloat={bloat:.1f}% on {tbl} — REINDEX can't be done by VACUUM, needs REINDEX",
+                        "dead": 0, "live": 0, "horizon": None})
+        elif not _index_ever_scanned(con, idx):
+            out.append({"table": idx, "verdict": "index-unused",
+                        "evidence": f"idx_scan=0 across snapshots on {tbl} ({size} bytes) — candidate for DROP (verify with pg_stat_statements first)",
+                        "dead": 0, "live": 0, "horizon": None})
     con.close()
     return out
+
+
+def _index_latest(con: sqlite3.Connection) -> list[tuple]:
+    """Latest (scans, size) per index from index_stats; tolerates old DBs."""
+    try:
+        return list(con.execute(
+            "SELECT idx, tbl, scans, size_bytes FROM index_stats "
+            "WHERE (idx, ts) IN (SELECT idx, max(ts) FROM index_stats GROUP BY idx)"))
+    except Exception:
+        return []
+
+
+def _index_bloat(con: sqlite3.Connection, idx: str) -> float | None:
+    """Latest pgstatindex bloat% for idx, or None (no measurement / skipped-large)."""
+    try:
+        row = con.execute("SELECT idx_bloat_pct FROM approx WHERE idx=? ORDER BY ts DESC LIMIT 1",
+                          (idx,)).fetchone()
+    except Exception:
+        return None
+    return row[0] if row else None
+
+
+def _index_ever_scanned(con: sqlite3.Connection, idx: str) -> bool:
+    """True if the index was ever scanned in any snapshot (cumulative counter)."""
+    try:
+        row = con.execute("SELECT max(scans) FROM index_stats WHERE idx=?", (idx,)).fetchone()
+    except Exception:
+        return True  # unknown -> don't accuse
+    return (row[0] or 0) > 0

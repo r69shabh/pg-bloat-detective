@@ -65,3 +65,19 @@ def test_single_db_no_label(tmp_path):
     seed(db)
     m = collect_all([db])
     assert "db=" not in m
+
+
+def test_index_metrics(tmp_path):
+    import sqlite3
+    db = str(tmp_path / "idx.db")
+    con = sqlite3.connect(db)
+    con.executescript("CREATE TABLE snapshots(ts INT, kind TEXT, tbl TEXT, live INT, dead INT, vac_ct INT, avac_ct INT, last_vac TEXT, last_avac TEXT); CREATE TABLE blockers(ts INT, kind TEXT, pid INT, xact_age TEXT, query TEXT, slot TEXT, active INT); CREATE TABLE approx(ts INT, tbl TEXT, dead_pct REAL, idx TEXT, idx_bloat_pct REAL); CREATE TABLE index_stats(ts INT, idx TEXT, tbl TEXT, scans INT, size_bytes INT);")
+    con.execute("INSERT INTO snapshots VALUES (1,'table','churn',10000,100,0,0,'','')")
+    con.execute("INSERT INTO approx VALUES (1,NULL,NULL,'churn_pkey',83.7)")
+    con.execute("INSERT INTO index_stats VALUES (1,'churn_pkey','churn',5000,32120832)")
+    con.commit()
+    con.close()
+    m = collect_metrics(db)
+    assert 'pgbloat_index_bloat_pct{index="churn_pkey"} 83.7' in m
+    assert 'pgbloat_index_scans{index="churn_pkey",table="churn"} 5000' in m
+    assert 'verdict="index-bloated"' in m
