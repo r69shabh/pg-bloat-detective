@@ -54,8 +54,8 @@ def collect(dsn: str, db_path: str, approx: bool = True, max_bytes: int = 1_073_
                     continue
                 try:
                     r = pg.execute(APPROX_SQL, (t,)).fetchone()
-                    # (table_len, tuple_count, tuple_len, tuple_pct, dead_count, dead_len, dead_pct, free, free_pct)
-                    dead_pct = float(r[6] or 0.0)
+                    # PG16: (table_len, scanned_pct, tup_count, tup_len, tup_pct, dead_count, dead_len, dead_pct, free, free_pct)
+                    dead_pct = float(r[7] or 0.0)
                     con.execute("INSERT INTO approx VALUES (?,?,?,NULL,NULL)", (ts, t, round(dead_pct, 2)))
                 except Exception:
                     pg.rollback()  # failed approx must not poison the read tx
