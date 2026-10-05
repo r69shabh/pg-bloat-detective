@@ -13,7 +13,8 @@ def main() -> None:
     a = p.parse_args()
     if a.mode == "idle-xact":  # holds xmin open -> blocks vacuum, the 60s demo
         con = psycopg.connect(a.dsn, autocommit=False)
-        con.execute("BEGIN; SELECT * FROM churn LIMIT 1; SELECT pg_sleep(%s)", (a.secs,))
+        con.execute("SELECT * FROM churn LIMIT 1")
+        con.execute("SELECT pg_sleep(%s)", (a.secs,))
     elif a.mode == "slot":
         with psycopg.connect(a.dsn, autocommit=True) as c:
             c.execute("SELECT pg_create_logical_replication_slot('abandoned_demo', 'test_decoding')")
