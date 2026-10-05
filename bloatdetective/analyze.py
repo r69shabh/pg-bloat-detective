@@ -21,10 +21,10 @@ def _age_secs(s: str) -> float:
 
 def _settings(con: sqlite3.Connection) -> dict:
     try:
-        rows = con.execute("SELECT name, setting FROM settings ORDER BY ts DESC LIMIT 50").fetchall()
+        rows = con.execute("SELECT name, setting FROM settings ORDER BY ts ASC").fetchall()
     except Exception:
         return {}
-    return {k: v for k, v in rows}  # latest snapshot wins; table is append-only per ts
+    return dict(rows)  # ASC + dict: latest snapshot wins per setting
 
 def trigger_threshold(live: int, s: dict) -> float:
     base = float(s.get("autovacuum_vacuum_threshold", 50))

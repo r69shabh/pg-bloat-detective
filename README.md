@@ -10,7 +10,8 @@ pip install -e ".[dev]"
 python -m bloatdetective collect --db timeline.db   # snapshot prod (read-only)
 python workload/churn.py --mode idle-xact --secs 60 &  # create the failure
 python -m bloatdetective collect --db timeline.db
-python -m bloatdetective report --db timeline.db
+python -m bloatdetective report --db timeline.db --html --out report.html
+python -m bloatdetective serve --db timeline.db &   # :9187/metrics for Prometheus
 pytest
 bash scripts/benchmark.sh   # full before/after proof -> REPORT.md
 ```

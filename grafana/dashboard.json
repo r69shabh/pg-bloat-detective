@@ -1,0 +1,8 @@
+{"title": "Bloat Detective", "panels": [
+  {"title": "Dead tuples by table", "type": "timeseries",
+   "targets": [{"expr": "pgbloat_dead_tuples"}]},
+  {"title": "Approx dead % by table", "type": "timeseries",
+   "targets": [{"expr": "pgbloat_approx_dead_pct"}]},
+  {"title": "Xmin holder age (s)", "type": "timeseries",
+   "targets": [{"expr": "pgbloat_xmin_holder_age_seconds"}]}
+]}

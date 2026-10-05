@@ -91,3 +91,10 @@ def test_missing_settings_table_tolerated(tmp_path):
 def test_evidence_names_slot(tmp_path):
     db = _db(tmp_path, GROWING, [(2, "stale-slot", None, "", "", "abandoned_demo", 0)])
     assert "abandoned_demo" in analyze(db)[0]["evidence"]
+
+def test_latest_settings_win(tmp_path):
+    snaps = [(1, "table", "churn", 10000, 100, 0, 0, "", ""), (2, "table", "churn", 10000, 500, 0, 0, "", "")]
+    db = _db(tmp_path, snaps, settings=[
+        (1, "autovacuum_vacuum_scale_factor", "0.01"),   # thr=150 -> 500 starved...
+        (2, "autovacuum_vacuum_scale_factor", "0.9")])   # ...but latest thr=9050 -> normal
+    assert analyze(db)[0]["verdict"] == "normal"
