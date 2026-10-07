@@ -3,7 +3,7 @@
   "name": "io.github.r69shabh/pg-bloat-detective",
   "title": "PG Bloat Detective",
   "description": "Read-only Postgres bloat diagnosis: verdicts (blocked-by/vacuum-starved/needs-rewrite/index-bloated), named blockers with PID+query, timelines, before/after proof. No writes to prod.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://github.com/r69shabh/pg-bloat-detective",
   "repository": {
     "url": "https://github.com/r69shabh/pg-bloat-detective",
@@ -15,8 +15,10 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "pg-bloat-detective",
-      "version": "0.1.0",
-      "transport": { "type": "stdio" },
+      "version": "0.1.1",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
           "name": "BLOAT_DSN",
