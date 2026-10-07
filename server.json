@@ -1,0 +1,36 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.r69shabh/pg-bloat-detective",
+  "title": "PG Bloat Detective",
+  "description": "Read-only Postgres bloat diagnosis: verdicts (blocked-by/vacuum-starved/needs-rewrite/index-bloated), named blockers with PID+query, timelines, before/after proof. No writes to prod.",
+  "version": "0.1.0",
+  "websiteUrl": "https://github.com/r69shabh/pg-bloat-detective",
+  "repository": {
+    "url": "https://github.com/r69shabh/pg-bloat-detective",
+    "source": "github"
+  },
+  "license": "MIT",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "pg-bloat-detective",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "BLOAT_DSN",
+          "description": "Postgres DSN (read-only enforced: 5s statement timeout, read-only tx)",
+          "isRequired": false,
+          "default": "dbname=bloatdemo user=postgres host=localhost port=5433"
+        },
+        {
+          "name": "BLOAT_DB",
+          "description": "SQLite timeline file written by bloatdetective collect",
+          "isRequired": false,
+          "default": "timeline.db"
+        }
+      ]
+    }
+  ]
+}
