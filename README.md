@@ -41,3 +41,35 @@ Earlier hole, now closed: an index at 83.7% bloat (density 16.3) dropped to 9.9%
 `REPORT.md`, visual in `report.html`.
 
 See [PLAN.md](PLAN.md) for the detailed 3-week plan + competitor gap.
+
+## MCP server (Claude Desktop / Cursor / any MCP client)
+
+5 tools, read-only on Postgres (5s statement timeout, read-only tx). `bloat_check`
+returns verdict + evidence + fix per table/index; `bloat_live_diagnose` snapshots a
+throwaway DB so your timeline file is never touched — safest for prod DSNs.
+
+```bash
+pip install -e .   # pulls mcp + psycopg
+bloat-mcp          # stdio transport
+```
+
+Claude Desktop (`~/Library/Application Support/Claude/claude_desktop_config.json`):
+
+```json
+{"mcpServers": {"bloat-detective": {
+  "command": "/abs/path/pg-bloat-detective/.venv/bin/python",
+  "args": ["-m", "bloatdetective.mcp_server"],
+  "env": {"BLOAT_DSN": "dbname=bloatdemo user=postgres host=localhost port=5433",
+          "BLOAT_DB": "/abs/path/pg-bloat-detective/timeline.db"}}}}
+```
+
+| tool | what the agent gets |
+|---|---|
+| `bloat_check` | verdicts + evidence + action per table/index |
+| `bloat_collect` | snapshot timeline, return fresh verdicts |
+| `bloat_timeline` | dead/approx/index-bloat series — when it started |
+| `bloat_blockers` | pid + query + xmin age + slot — who to kill |
+| `bloat_live_diagnose` | one-shot throwaway snapshot, diagnose, discard |
+
+Public listing: [mcp.so](https://mcp.so) + [PulseMCP](https://www.pulsemcp.com) accept
+GitHub submissions (server.json + README badge) — repo is ready, submit the URL after push.
