@@ -1,5 +1,7 @@
 # pg-bloat-detective
 
+mcp-name: io.github.r69shabh/pg-bloat-detective
+
 Read-only Postgres bloat detective: cheap timeline, named blocker, index bloat, evidence-linked report, before/after proof.
 
 ## Quickstart
