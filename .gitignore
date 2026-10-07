@@ -8,3 +8,4 @@ dashboard/node_modules/
 dashboard/.next/
 dashboard/tsconfig.tsbuildinfo
 .pytest_cache/
+build/

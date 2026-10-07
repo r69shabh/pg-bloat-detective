@@ -3,8 +3,8 @@ name = "pg-bloat-detective"
 version = "0.1.0"
 description = "Read-only Postgres bloat detective: cheap timeline + blocker attribution + index bloat + before/after proof"
 readme = "README.md"
-requires-python = ">=3.10"
-license = "MIT"
+requires-python = ">=3.12"
+license = { text = "MIT" }
 keywords = ["postgres", "bloat", "vacuum", "mcp", "dba", "observability"]
 classifiers = [
   "Development Status :: 4 - Beta",
