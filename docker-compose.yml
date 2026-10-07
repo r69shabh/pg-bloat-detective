@@ -11,3 +11,27 @@ services:
   #   --idle-xact  : open idle-in-transaction + hold xmin
   #   --slot       : create abandoned replication slot
   #   --churn      : aggressive update/delete loop (+ optional pgbench)
+  exporter:
+    image: python:3.12-slim
+    working_dir: /app
+    volumes: [".:/app:ro", "./timeline.db:/app/timeline.db:ro"]
+    command: ["python", "-m", "bloatdetective.serve_loop"]
+    environment:
+      BLOAT_DB: /app/timeline.db
+      BLOAT_PORT: "9187"
+    ports: ["9187:9187"]
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    ports: ["9090:9090"]
+    volumes: ["./grafana/prometheus.yml:/etc/prometheus/prometheus.yml:ro"]
+    command: ["--config.file=/etc/prometheus/prometheus.yml"]
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports: ["3001:3000"]
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - "./grafana/dashboard.json:/var/lib/grafana/dashboards/bloat.json:ro"
+      - "./grafana/provisioning-datasource.yml:/etc/grafana/provisioning/datasources/bloat.yml:ro"
+      - "./grafana/provisioning-dashboard.yml:/etc/grafana/provisioning/dashboards/bloat.yml:ro"

@@ -45,10 +45,13 @@ export function ChartAreaInteractive({ feed }: { feed: Feed }) {
 
   return (
     <>
-    <Card className="@container/card">
+    <Card className="@container/card" id="dead-tuples">
       <CardHeader>
-        <CardTitle>Dead tuples</CardTitle>
-        <CardDescription>Per-table timeline from the collector snapshots</CardDescription>
+        <CardTitle>Dead tuples — is VACUUM keeping up?</CardTitle>
+        <CardDescription>
+          Dead rows per table over time. Rising = writes outpacing vacuum (check blockers below).
+          Falling to zero = vacuum caught up. Flat low = healthy, leave it alone.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <div className="h-[250px] w-full">
@@ -67,10 +70,13 @@ export function ChartAreaInteractive({ feed }: { feed: Feed }) {
       </CardContent>
     </Card>
     {indexes.length > 0 && (
-    <Card className="@container/card mt-4">
+    <Card className="@container/card mt-4" id="index-bloat">
       <CardHeader>
-        <CardTitle>Index bloat %</CardTitle>
-        <CardDescription>100 − pgstatindex avg_leaf_density per index</CardDescription>
+        <CardTitle>Index bloat % — does it need REINDEX?</CardTitle>
+        <CardDescription>
+          100 − pgstatindex avg_leaf_density per index. VACUUM never fixes this —
+          only REINDEX (or pg_repack) does. Over 30% = schedule one.
+        </CardDescription>
       </CardHeader>
       <CardContent className="px-2 pt-4 sm:px-6 sm:pt-6">
         <div className="h-[200px] w-full">
