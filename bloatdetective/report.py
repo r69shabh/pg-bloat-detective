@@ -23,30 +23,48 @@ def _sparkline(points: list[int], w: int = 200, h: int = 36) -> str:
 
 def export_json(db_path: str, findings: list[dict]) -> dict:
     """Machine-readable feed for the shadcn dashboard: findings + per-table series + blockers."""
-    con = sqlite3.connect(db_path)
-    tables = [r[0] for r in con.execute("SELECT DISTINCT tbl FROM snapshots ORDER BY tbl")]
-    series = {t: [{"ts": ts, "live": lv, "dead": d} for ts, lv, d in
-              con.execute("SELECT ts, live, dead FROM snapshots WHERE tbl=? ORDER BY ts", (t,))] for t in tables}
-    approx = {t: [{"ts": ts, "dead_pct": p} for ts, p in
-              con.execute("SELECT ts, dead_pct FROM approx WHERE tbl=? AND idx IS NULL ORDER BY ts", (t,))] for t in tables}
     try:
-        idx_names = [r[0] for r in con.execute("SELECT DISTINCT idx FROM approx WHERE idx IS NOT NULL ORDER BY idx")]
-        index_bloat = {i: [{"ts": ts, "bloat_pct": p} for ts, p in
-                       con.execute("SELECT ts, idx_bloat_pct FROM approx WHERE idx=? AND idx_bloat_pct IS NOT NULL ORDER BY ts", (i,))] for i in idx_names}
+        con = sqlite3.connect(db_path)
     except Exception:
-        index_bloat = {}
+        return {"generated_at": int(time.time()), "findings": findings, "series": {},
+                "approx": {}, "index_bloat": {}, "index_scans": {}, "blockers": []}
     try:
-        scan_names = [r[0] for r in con.execute("SELECT DISTINCT idx FROM index_stats ORDER BY idx")]
-        index_scans = {i: [{"ts": ts, "scans": s} for ts, s in
-                       con.execute("SELECT ts, scans FROM index_stats WHERE idx=? ORDER BY ts", (i,))] for i in scan_names}
-    except Exception:
-        index_scans = {}  # old DBs without index_stats: feed stays heap-only
-    blockers = [{"ts": ts, "kind": k, "pid": p, "age": a, "query": q, "slot": s} for ts, k, p, a, q, s in
-                con.execute("SELECT ts, kind, pid, xact_age, query, slot FROM blockers ORDER BY ts DESC LIMIT 20")]
-    con.close()
-    return {"generated_at": int(time.time()), "findings": findings, "series": series,
-            "approx": approx, "index_bloat": index_bloat, "index_scans": index_scans,
-            "blockers": blockers}
+        try:
+            tables = [r[0] for r in con.execute("SELECT DISTINCT tbl FROM snapshots ORDER BY tbl")]
+        except Exception:
+            tables = []
+        series = {t: [{"ts": ts, "live": lv, "dead": d} for ts, lv, d in
+                  con.execute("SELECT ts, live, dead FROM snapshots WHERE tbl=? ORDER BY ts", (t,))] for t in tables}
+        try:
+            approx = {t: [{"ts": ts, "dead_pct": p} for ts, p in
+                    con.execute("SELECT ts, dead_pct FROM approx WHERE tbl=? AND idx IS NULL ORDER BY ts", (t,))] for t in tables}
+        except Exception:
+            approx = {}
+        try:
+            idx_names = [r[0] for r in con.execute("SELECT DISTINCT idx FROM approx WHERE idx IS NOT NULL ORDER BY idx")]
+            index_bloat = {i: [{"ts": ts, "bloat_pct": p} for ts, p in
+                        con.execute("SELECT ts, idx_bloat_pct FROM approx WHERE idx=? AND idx_bloat_pct IS NOT NULL ORDER BY ts", (i,))] for i in idx_names}
+        except Exception:
+            index_bloat = {}
+        try:
+            scan_names = [r[0] for r in con.execute("SELECT DISTINCT idx FROM index_stats ORDER BY idx")]
+            index_scans = {i: [{"ts": ts, "scans": s} for ts, s in
+                        con.execute("SELECT ts, scans FROM index_stats WHERE idx=? ORDER BY ts", (i,))] for i in scan_names}
+        except Exception:
+            index_scans = {}  # old DBs without index_stats: feed stays heap-only
+        try:
+            blockers = [{"ts": ts, "kind": k, "pid": p, "age": a, "query": q, "slot": s} for ts, k, p, a, q, s in
+                    con.execute("SELECT ts, kind, pid, xact_age, query, slot FROM blockers ORDER BY ts DESC LIMIT 20")]
+        except Exception:
+            blockers = []
+        return {"generated_at": int(time.time()), "findings": findings, "series": series,
+                "approx": approx, "index_bloat": index_bloat, "index_scans": index_scans,
+                "blockers": blockers}
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
 
 def render_html(db_path: str, findings: list[dict]) -> str:
     con = sqlite3.connect(db_path)

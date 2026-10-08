@@ -53,7 +53,10 @@ def bloat_check(db: str = "") -> dict:
         pgstattuple approx %, pgstatindex %, blocker pid+query.
     """
     path = db or DB
-    findings = analyze(path)
+    try:
+        findings = analyze(path)
+    except Exception:
+        findings = []
     return {"findings": [{**f, "action": _action(f)} for f in findings]}
 
 
@@ -88,26 +91,39 @@ def bloat_timeline(table: str = "", db: str = "") -> dict:
          spike-then-zero = was blocked, blocker left.
     """
     path = db or DB
-    con = sqlite3.connect(path)
-    names = [table] if table else [r[0] for r in con.execute("SELECT DISTINCT tbl FROM snapshots ORDER BY tbl")]
-    out: dict = {}
-    for t in names:
-        out[t] = {
-            "dead": [{"ts": ts, "live": lv, "dead": d} for ts, lv, d in
-                     con.execute("SELECT ts, live, dead FROM snapshots WHERE tbl=? ORDER BY ts", (t,))],
-            "approx_pct": [{"ts": ts, "dead_pct": p} for ts, p in
-                           con.execute("SELECT ts, dead_pct FROM approx WHERE tbl=? AND idx IS NULL ORDER BY ts", (t,))],
-        }
     try:
-        idx_names = [r[0] for r in con.execute("SELECT DISTINCT idx FROM approx WHERE idx IS NOT NULL ORDER BY idx")]
-        if table:
-            idx_names = [i for i in idx_names if table in i]
-        out["index_bloat"] = {i: [{"ts": ts, "bloat_pct": p} for ts, p in
-                              con.execute("SELECT ts, idx_bloat_pct FROM approx WHERE idx=? AND idx_bloat_pct IS NOT NULL ORDER BY ts", (i,))] for i in idx_names}
+        con = sqlite3.connect(path)
     except Exception:
-        pass
-    con.close()
-    return out
+        return {}
+    try:
+        names = [table] if table else [r[0] for r in con.execute("SELECT DISTINCT tbl FROM snapshots ORDER BY tbl")]
+        out: dict = {}
+        for t in names:
+            try:
+                out[t] = {
+                    "dead": [{"ts": ts, "live": lv, "dead": d} for ts, lv, d in
+                             con.execute("SELECT ts, live, dead FROM snapshots WHERE tbl=? ORDER BY ts", (t,))],
+                    "approx_pct": [{"ts": ts, "dead_pct": p} for ts, p in
+                                   con.execute("SELECT ts, dead_pct FROM approx WHERE tbl=? AND idx IS NULL ORDER BY ts", (t,))],
+                }
+            except Exception:
+                out[t] = {"dead": [], "approx_pct": []}
+        try:
+            idx_names = [r[0] for r in con.execute("SELECT DISTINCT idx FROM approx WHERE idx IS NOT NULL ORDER BY idx")]
+            if table:
+                idx_names = [i for i in idx_names if table in i]
+            out["index_bloat"] = {i: [{"ts": ts, "bloat_pct": p} for ts, p in
+                                  con.execute("SELECT ts, idx_bloat_pct FROM approx WHERE idx=? AND idx_bloat_pct IS NOT NULL ORDER BY ts", (i,))] for i in idx_names}
+        except Exception:
+            out["index_bloat"] = {}
+        return out
+    except Exception:
+        return {}
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
 
 
 @mcp.tool()
@@ -123,9 +139,19 @@ def bloat_blockers(db: str = "") -> dict:
          Use pid with SELECT pg_terminate_backend(pid) after verification.
     """
     path = db or DB
-    con = sqlite3.connect(path)
-    rows = con.execute("SELECT ts, kind, pid, xact_age, query, slot FROM blockers ORDER BY ts DESC LIMIT 20").fetchall()
-    con.close()
+    try:
+        con = sqlite3.connect(path)
+    except Exception:
+        return {"blockers": []}
+    try:
+        rows = con.execute("SELECT ts, kind, pid, xact_age, query, slot FROM blockers ORDER BY ts DESC LIMIT 20").fetchall()
+    except Exception:
+        rows = []
+    finally:
+        try:
+            con.close()
+        except Exception:
+            pass
     return {"blockers": [{"ts": ts, "kind": k, "pid": p, "age": a, "query": q, "slot": s}
                          for ts, k, p, a, q, s in rows]}
 
