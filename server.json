@@ -3,7 +3,7 @@
   "name": "io.github.r69shabh/pg-bloat-detective",
   "title": "PG Bloat Detective",
   "description": "Read-only Postgres bloat verdicts: blockers, timelines, REINDEX proof.",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "websiteUrl": "https://github.com/r69shabh/pg-bloat-detective",
   "repository": {
     "url": "https://github.com/r69shabh/pg-bloat-detective",
@@ -15,7 +15,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "pg-bloat-detective",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "transport": {
         "type": "stdio"
       },
