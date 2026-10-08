@@ -39,7 +39,19 @@ def _action(f: dict) -> str:
 
 @mcp.tool()
 def bloat_check(db: str = "") -> dict:
-    """Diagnose bloat: verdict + evidence + fix per table/index. Reads the SQLite timeline (collect first, or pass a DSN snapshot)."""
+    """Diagnose PostgreSQL bloat from a collected timeline.
+
+    Read-only: only reads the local SQLite timeline file, never touches Postgres.
+    Args:
+        db: Path to the SQLite timeline file (default: BLOAT_DB env, 'timeline.db').
+            Collect one first with bloat_collect, or pass any timeline.db path.
+    Returns:
+        findings: list of {table, verdict, evidence, action} — verdict is one of
+        normal | vacuum-starved | blocked-by-idle-xact | blocked-by-slot |
+        blocked-by-prepared | blocked-by-active-xact | needs-rewrite |
+        index-bloated | index-unused. Evidence carries dead/live counts,
+        pgstattuple approx %, pgstatindex %, blocker pid+query.
+    """
     path = db or DB
     findings = analyze(path)
     return {"findings": [{**f, "action": _action(f)} for f in findings]}
@@ -47,7 +59,16 @@ def bloat_check(db: str = "") -> dict:
 
 @mcp.tool()
 def bloat_collect(dsn: str = "") -> dict:
-    """Take a read-only snapshot (5s statement timeout, read-only tx) into the timeline, then return fresh verdicts."""
+    """Take a read-only Postgres snapshot into the timeline, then return fresh verdicts.
+
+    Safe on prod: read-only transaction, 5s statement timeout, needs only
+    pg_stat_* views + optional pgstattuple extension. No writes, no agents.
+    Args:
+        dsn: Postgres DSN, e.g. 'dbname=app user=readonly host=db.internal'.
+            Default: BLOAT_DSN env. Never logs the password.
+    Returns:
+        {snapshot: 'saved', db: path, findings: [...with action per table/index]}.
+    """
     collect(dsn or DSN, DB)
     return {"snapshot": "saved", "db": DB,
             "findings": [{**f, "action": _action(f)} for f in analyze(DB)]}
@@ -55,7 +76,17 @@ def bloat_collect(dsn: str = "") -> dict:
 
 @mcp.tool()
 def bloat_timeline(table: str = "", db: str = "") -> dict:
-    """Dead-tuple + approx + index-bloat series for one table (or all). Shows when it started."""
+    """Dead-tuple + approx + index-bloat time series: when the bloat started.
+
+    Read-only on the local timeline file.
+    Args:
+        table: Table name to filter (e.g. 'churn'). Empty = all tables.
+        db: Path to the SQLite timeline file (default: BLOAT_DB env).
+    Returns:
+        {table: {dead: [{ts, live, dead}], approx_pct: [{ts, dead_pct}]},
+         index_bloat: {index: [{ts, bloat_pct}]}}. Rising dead = vacuum-starved;
+         spike-then-zero = was blocked, blocker left.
+    """
     path = db or DB
     con = sqlite3.connect(path)
     names = [table] if table else [r[0] for r in con.execute("SELECT DISTINCT tbl FROM snapshots ORDER BY tbl")]
@@ -81,7 +112,16 @@ def bloat_timeline(table: str = "", db: str = "") -> dict:
 
 @mcp.tool()
 def bloat_blockers(db: str = "") -> dict:
-    """Who is pinning VACUUM: pid + query + xmin age + slot. Kill one, then VACUUM."""
+    """Who is pinning VACUUM: blocker pid + query + xmin age + slot.
+
+    Read-only on the local timeline file. Priority: prepared-xact > stale-slot
+    > idle-in-transaction. Fix: end the named session, then VACUUM the table.
+    Args:
+        db: Path to the SQLite timeline file (default: BLOAT_DB env).
+    Returns:
+        {blockers: [{ts, kind, pid, age, query, slot}] — newest first, max 20.
+         Use pid with SELECT pg_terminate_backend(pid) after verification.
+    """
     path = db or DB
     con = sqlite3.connect(path)
     rows = con.execute("SELECT ts, kind, pid, xact_age, query, slot FROM blockers ORDER BY ts DESC LIMIT 20").fetchall()
@@ -92,7 +132,16 @@ def bloat_blockers(db: str = "") -> dict:
 
 @mcp.tool()
 def bloat_live_diagnose(dsn: str = "") -> dict:
-    """One-shot: snapshot throwaway DB (never touches your timeline file), diagnose, discard. Safest for prod DSNs."""
+    """One-shot live diagnosis without touching your timeline file.
+
+    Snapshots into a throwaway temp DB, diagnoses, discards it. Read-only on
+    Postgres (read-only tx, 5s timeout). Safest option for prod DSNs.
+    Args:
+        dsn: Postgres DSN (default: BLOAT_DSN env). Password never logged.
+    Returns:
+        {findings: [...with action], blockers: [...]} — same verdict set as
+        bloat_check, plus the current xmin-holder evidence.
+    """
     fd, tmp = tempfile.mkstemp(suffix=".db")
     os.close(fd)
     try:

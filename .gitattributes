@@ -1,0 +1,4 @@
+# Mark the Next.js demo dashboard as vendored so GitHub Linguist / Glama
+# detect this repo as Python (the MCP server + CLI are Python).
+dashboard/** linguist-vendored
+dashboard/* linguist-vendored
