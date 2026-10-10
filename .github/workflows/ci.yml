@@ -27,6 +27,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Release metadata consistency
+        run: python scripts/check_versions.py
       - run: pip install -e ".[dev]"
       - name: Seed demo DB (extension + table the integration tests expect)
         run: |
