@@ -14,10 +14,10 @@ jobs:
     environment: pypi
     steps:
       - uses: actions/checkout@v4
-      - name: Verify tag matches package version
-        run: python scripts/check_versions.py "$GITHUB_REF_NAME"
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - name: Verify tag matches package version (fails before build, not after)
+        run: python scripts/check_versions.py "$GITHUB_REF_NAME"
       - run: pip install build && python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1
   mcp-registry:
