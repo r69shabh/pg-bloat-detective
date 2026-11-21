@@ -6,18 +6,37 @@
 mcp-name: io.github.r69shabh/pg-bloat-detective
 
 [![PyPI](https://img.shields.io/pypi/v/pg-bloat-detective)](https://pypi.org/project/pg-bloat-detective/)
+[![CI](https://github.com/r69shabh/pg-bloat-detective/actions/workflows/ci.yml/badge.svg)](https://github.com/r69shabh/pg-bloat-detective/actions/workflows/ci.yml)
 [![MCP Registry](https://img.shields.io/badge/MCP%20Registry-io.github.r69shabh%2Fpg--bloat--detective-blue)](https://registry.modelcontextprotocol.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-48%20passed-brightgreen)](tests/)
 
 **pip install pg-bloat-detective · Docker ready · MCP server for Claude/Cursor · Prometheus + Grafana · Next.js dashboard**
 
+## Start here
+
+Read-only PostgreSQL bloat checker. Each snapshot lands in one SQLite file: dead tuples from `pg_stat_user_tables`, the session or slot holding `backend_xmin`, and index bloat from `pgstatindex`. `analyze` prints one verdict per table or index (`vacuum-starved`, `blocked-by-*`, `needs-rewrite`, `index-bloated`, `index-unused`) with the PID and query when a blocker is the cause.
+
 ```bash
-pip install pg-bloat-detective          # or: pip install -e ".[dev]" from source
-python -m bloatdetective collect --db timeline.db   # read-only snapshot (5s timeout)
-python -m bloatdetective analyze --db timeline.db   # verdicts + evidence
-python -m bloatdetective report --db timeline.db --html --out report.html
-bloat-mcp                              # MCP server (stdio) for Claude Desktop / Cursor
+pip install pg-bloat-detective
+python -m bloatdetective collect --db timeline.db   # read-only snapshot, 5s statement timeout
+python -m bloatdetective analyze --db timeline.db   # one line per table or index
+```
+
+The default DSN is the compose demo database: `dbname=bloatdemo user=postgres password=postgres host=localhost port=5433`. `docker compose up -d` starts it. The 60-second idle-transaction demo is in Quickstart below. `bloat-mcp` is the stdio MCP server.
+
+Tests (live Postgres cases skip when that database is down; CI runs them against Postgres 16):
+
+```bash
+pip install -e ".[dev]"
+pytest
+```
+
+Sample report, copied from the checked-in [`REPORT.md`](REPORT.md) (`python -m bloatdetective report --db timeline.db`). `analyze` prints the same verdict and evidence as `table: verdict — evidence`.
+
+```text
+| table | verdict | dead | live | evidence |
+| churn | **normal** | 0 | 305238 | dead=0 (threshold 61098), approx 0.0% — steady state, leave alone |
 ```
 
 ## What this is
@@ -70,6 +89,18 @@ Earlier hole, now closed: an index at 83.7% bloat (density 16.3) dropped to 9.9%
 `REPORT.md`, visual in `report.html`.
 
 See [PLAN.md](PLAN.md) for the detailed 3-week plan + competitor gap.
+
+## Debugging notes
+
+Real failures from the commit history and the comments they left in the code. Measured before/after numbers stay in the Benchmark section.
+
+- **`pgstattuple_approx` column order (live PG16).** `SELECT *` was indexed wrong twice. The collector first treated index 3 as a dead-tuple count and divided by index 1. The next commit read `dead_pct` at index 6. Against Postgres 16 the row is `(table_len, scanned_pct, tup_count, tup_len, tup_pct, dead_count, dead_len, dead_pct, free, free_pct)`, so `dead_pct` is index 7 (`bloatdetective/collector.py`).
+- **Churn SQL used `%%`.** `workload/churn.py` sent `id %% 10` and `id %% 97` to Postgres. SQL modulo is a single `%`. Found when the collector was checked against the compose database. That database is published on host port 5433 (`docker-compose.yml`: 5432 was already taken on the machine).
+- **`pg_stat` lags `pgstattuple_approx`.** Observed on a live database: `pg_stat` counters lag the stats flush interval while approx already shows a clean heap. If the stat percentage is over 20% and approx is under 5%, the verdict stays `normal` and the evidence says the stat looks stale (`bloatdetective/analyze.py`).
+- **Latest autovacuum settings lost.** Settings were loaded with `ORDER BY ts DESC LIMIT 50` and put into a dict, so older rows overwrote newer ones. The query is now `ORDER BY ts ASC` with no limit; the dict keeps the last value per name (`test_latest_settings_win`).
+- **Missing timeline crashed MCP startup.** `analyze`, the MCP tools, and `report --json` assumed a populated SQLite file. A missing or empty `BLOAT_DB` now returns empty findings. The image default is the relative path `timeline.db` so a missing `/data` mount does not crash the process (`Dockerfile`).
+- **`bloat-mcp` was not installed.** Without a `[build-system]` table, `uv sync` skipped `[project.scripts]`, so `/app/.venv/bin/bloat-mcp` never existed and Glama's `mcp-proxy -- bloat-mcp` failed with ENOENT.
+- **Release tag did not match the wheel.** Tag `v0.1.4` still had `0.1.3` in `pyproject.toml`; PyPI rejected the upload with "File already exists". `scripts/check_versions.py` compares `pyproject.toml`, `server.json` (including the registry description length limit of 100), and an optional git tag. On the publish workflow that check runs after `setup-python`, because `tomllib` needs Python 3.11 or newer. Push CI listens on `master` as well as `main` — the default branch is `master`, so a `main`-only trigger never ran.
 
 ## MCP server (Claude Desktop / Cursor / any MCP client)
 
